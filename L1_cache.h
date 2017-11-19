@@ -1,3 +1,10 @@
+//functions to simulate an L1 cache
+//new L1_cache object constructs array of pointers to Cache_sets
+
+
+
+
+
 #include<iostream>
 #include<cmath>
 #include<ctime>
