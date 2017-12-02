@@ -19,6 +19,7 @@ cacheLine::cacheLine(void)
 	tag = 0;
 	mesiBit = 'I';	
 	LRU = 0;
+	isFirstWrite = true;
 }
 
 //destructor
@@ -38,6 +39,7 @@ L1_cache::L1_cache(void)
 	read = 0;
 	write = 0;
 	hitRate = 0;
+	verbose = false;
 };
 
 
@@ -50,6 +52,7 @@ L1_cache::L1_cache(int set, int way)
 	read = 0;
 	write = 0;
 	hitRate = 0;
+	verbose = false;
 
 	sets = new cacheLine *[set];
 
@@ -127,6 +130,10 @@ void L1_cache::readRequest(char * to_read_address)
 	}
 
 	//No hit, find an available cache line to read data into or evict LRU line
+	//Verbose message
+	if (verbose)
+		cout << "Read from L2 " << to_read_address << endl;
+
 	for (int j  = 0; j < numOfWays; j++)
 	{	
 		if (sets[index][j].mesiBit == 'I') //There is an available line
@@ -143,6 +150,9 @@ void L1_cache::readRequest(char * to_read_address)
 		}
 		else if (sets[index][j].LRU == 0) //Line is LRU line, evict this line
 		{
+			if (sets[index][j].mesiBit == 'M' && verbose)
+				cout << "Write data to L2 " << sets[index][j].address << endl;
+
 			delete sets[index][j].address;
 			sets[index][j].address = new char[strlen(to_read_address) + 1];
 			strcpy(sets[index][j].address, to_read_address);
@@ -161,8 +171,78 @@ void L1_cache::readRequest(char * to_read_address)
 /******************************* Write Request **********************************/
 void L1_cache::writeRequest(char * to_write_address)
 {
+    long int index, tag;
+    
+    index = getIndex(hexToInt(to_write_address));
+    tag = getTag(hexToInt(to_write_address));
+    
+    //Check if there is a hit
+    for (int i = 0; i < numOfWays; i++)
+    {
+        if (sets[index][i].mesiBit != 'I' && sets[index][i].tag == tag)
+        {	
+			if (sets[index][i].isFirstWrite)
+			{
+				if (verbose)
+					cout << "Write to L2 " << to_write_address << endl;
 
+				sets[index][i].mesiBit = 'E';
+				sets[index][i].isFirstWrite = false;
+			}
+			else 
+				sets[index][i].mesiBit = 'M';
+            
+			updateLRU(index, i);
+            write++;
+            hit++;
+            return;
+        }
+    }
+    
+    //No hit, find an available cache line to write data into or evict LRU line
+	
+	//verbose message to indicate a read from L2 due to a write miss
+	read++; //read for ownership
 
+	if (verbose)
+	{
+		cout << "Read for Ownership from L2 " << to_write_address << endl;
+		cout << "Write data to L2 " << to_write_address << endl;
+	}
+
+    for (int j  = 0; j < numOfWays; j++)
+    {
+        if (sets[index][j].mesiBit == 'I') //There is an available line
+        {
+            sets[index][j].address = new char[strlen(to_write_address) + 1];
+            strcpy(sets[index][j].address, to_write_address);
+            sets[index][j].tag = tag;
+			sets[index][j].mesiBit = 'E';
+			sets[index][j].isFirstWrite = false;
+
+            updateLRU(index, j);
+            write++;
+            miss++;
+            return;
+        }
+        else if (sets[index][j].LRU == 0) //Line is LRU line, evict this line
+        {
+			if (sets[index][j].mesiBit == 'M' && verbose)
+				cout << "Write data to L2 " << sets[index][j].address << endl;
+
+            delete sets[index][j].address;
+            sets[index][j].address = new char[strlen(to_write_address) + 1];
+            strcpy(sets[index][j].address, to_write_address);
+            sets[index][j].tag = tag;
+            sets[index][j].mesiBit = 'E';
+            sets[index][j].isFirstWrite = false;
+
+            updateLRU(index, j);
+            write++;
+            miss++;
+            return;
+        }
+    }
 
 	return;
 }
@@ -170,8 +250,10 @@ void L1_cache::writeRequest(char * to_write_address)
 
 
 /******************************* Invalid Command ********************************/
-void L1_cache::invalidateCommand(char * to_validate_address)
+bool L1_cache::invalidateCommand(char * to_validate_address)
 {
+	bool rValue = false;
+
 	long int index, tag;
 	index = getIndex(hexToInt(to_validate_address));
 	tag = getTag(hexToInt(to_validate_address));
@@ -181,18 +263,21 @@ void L1_cache::invalidateCommand(char * to_validate_address)
 	{
 		if (sets[index][i].mesiBit != 'I' && sets[index][i].tag == tag)
 		{	
+			//Return data to L2 if it has been modified
+			if (sets[index][i].mesiBit == 'M' && verbose)
+				cout << "Write data to L2 " << sets[index][i].address << endl;
+
 			LRUForInval(index, i);
 			sets[index][i].mesiBit = 'I';
 			delete sets[index][i].address;
 			
-			return;
+			return rValue;
 		}
 	}
 	
 	//to_validate_address is not in a cache line then simply return
-	return;
+	return rValue;
 }
-
 
 
 /**************************** Instruction Fetch  ********************************/
@@ -204,15 +289,29 @@ void L1_cache::instructionFetch(char * to_fetch_address)
 }
 
 
-
 /************************** Data Request From L2  *******************************/
-void L1_cache::dataRequestFromL2(char * to_send_address)
+bool L1_cache::dataRequestFromL2(char * to_send_address)
 {
+	bool rValue = false;
+	long int index, tag;
+	index = getIndex(hexToInt(to_send_address));
+	tag = getTag(hexToInt(to_send_address));
+	
+	//Check if to_send_address is in a cache line
+	for (int i = 0; i < numOfWays; i++)
+	{
+		if (sets[index][i].mesiBit == 'M' && sets[index][i].tag == tag)
+		{
+			if (verbose)
+				cout << "Return data to L2 " << sets[index][i].address << endl;
 
-
-
-
-	return;
+			sets[index][i].mesiBit = 'S';
+			rValue = true;
+		}
+	}
+	
+	//to_send_address is not in a cache line then simply return false
+	return rValue;
 }
 
 
@@ -235,7 +334,7 @@ void L1_cache::clear(void)
 			{
 				sets[i][j].mesiBit = 'I';
 				sets[i][j].LRU = 0;
-				sets[i][j].tag = 0;
+				sets[i][j].tag = 0; //Not really need this
 				delete sets[i][j].address;	
 			}
 		}
@@ -265,7 +364,7 @@ void L1_cache::print(void)
 }
 
 
-void L1_cache::_print(char * to_print_address) //For debugging purpose
+void L1_cache::_print(char * to_print_address) //For debuging purpose
 {
 	long int index;
 
@@ -325,11 +424,22 @@ void L1_cache::summary(void)
 	if (hit != 0 || read != 0 || write != 0) //avoid 0/0
 		hitRate = (float)(hit)/(float)(read+write);
 
-	cout << "*Number of cache reads: " << read << endl;
-	cout << "*Number of cache writes: " << write << endl;
-	cout << "*Number of cache hits: " << hit << endl;
-	cout << "*Number of cache misses: " <<  miss << endl;
-	cout << "*Cache hit ratio: " << fixed <<setprecision(2) << hitRate * 100 << '%' << endl;
+	cout << "***Number of cache reads: " << read << endl;
+	cout << "***Number of cache writes: " << write << endl;
+	cout << "***Number of cache hits: " << hit << endl;
+	cout << "***Number of cache misses: " <<  miss << endl;
+	cout << "***Cache hit ratio: " << fixed <<setprecision(2) << hitRate * 100 << '%' << endl << endl;
 
 	return;
+}
+
+bool L1_cache::set_verbose(bool to_set)
+{
+	verbose = to_set;
+	return verbose;
+}
+
+bool L1_cache::get_verbose(void)
+{
+	return verbose;
 }

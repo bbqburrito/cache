@@ -37,6 +37,7 @@ public:
     long int tag;
     char mesiBit;
 	int LRU;
+	bool isFirstWrite;
 };
 
 //L1 cache
@@ -49,18 +50,19 @@ public:
 
     void readRequest(char * to_read_address);
 	void writeRequest(char * to_write_address);
-	void invalidateCommand(char * to_validate_address);
+	bool invalidateCommand(char * to_validate_address);
     void instructionFetch(char * to_fetch_address);
-	void dataRequestFromL2(char * to_send_address);
+	bool dataRequestFromL2(char * to_send_address);
 	void clear(void);
 	void print(void);
 	void summary(void);
 	void _print(char * address);
+	bool set_verbose(bool to_set);
+	bool get_verbose(void);
 
 private:	
 	void updateLRU(long int index, int way);
 	void LRUForInval(long int index, int way);
-    
     cacheLine ** sets;
 	long int totalSets;
 	int numOfWays;
@@ -69,6 +71,7 @@ private:
     long int read;
     long int write;
     float hitRate;
+	bool verbose;
 };
 
 /*********************************** Other Functions **********************************/
