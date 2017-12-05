@@ -56,9 +56,7 @@ public:
 	void clear(void);
 	void print(void);
 	void summary(void);
-	void _print(char * address);
 	bool set_verbose(bool to_set);
-	bool get_verbose(void);
 
 private:	
 	void updateLRU(long int index, int way);

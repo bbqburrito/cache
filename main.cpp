@@ -5,7 +5,6 @@
  * Course: ECE485
  * Final Project
  * File name: main.cpp
- * Description: 
  **********************************************************************************
  *********************************************************************************/
 
@@ -25,7 +24,7 @@ int main(int argc, const char * argv[])
 	//give usage message
 	if (argc != 3)
 	{
-		cout << "Usage: ./cache <-v> <filename>\n\n";	
+		cout << "Usage: ./cache <0 or 1> <filename>\n\n";	
 		return 0;	
 	}	
 	else if (atoi(argv[1]) != 0)
@@ -45,12 +44,6 @@ int main(int argc, const char * argv[])
 
 	while (read_file(filein, command, address))
 	{
-		//cout << command << ' ' << address << endl;
-        //cout <<  hexToInt(address) << endl;
-        //cout << getTag(hexToInt(address)) << endl;
-        //cout << getIndex(hexToInt(address)) << endl;
-        
-	
 		switch(command)
         {
             case 0:
@@ -86,9 +79,9 @@ int main(int argc, const char * argv[])
             }
             case 9:
 			{
-                cout << "-------------- Data Cache Content --------------" << endl;
+                cout << "-------------- Data Cache Content --------------\n";
                 my_dCache.print();
-                cout << "----------- Instruction Cache Content ----------" << endl;
+                cout << "----------- Instruction Cache Content ----------\n";
                 my_iCache.print();
                 break;
             }
@@ -100,9 +93,9 @@ int main(int argc, const char * argv[])
         }
 	}
 		
-		cout << "-------------- Data Cache Statistic ------------" << endl;
+		cout << "-------------- Data Cache Statistic ------------\n";
 		my_dCache.summary();
-		cout << "----------- Instruction Cache Statistic --------" << endl;
+		cout << "----------- Instruction Cache Statistic --------\n";
 		my_iCache.summary();
 
    		return 0;
